@@ -33,6 +33,13 @@ jobs:
           echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
           echo "Build ID: $BUILD_ID"
 
+      - name: Mark build as running
+        run: |
+          curl -sf -X PATCH "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}" \
+            -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"running"}'
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
