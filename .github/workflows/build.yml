@@ -1,0 +1,97 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  IDP_HOST: https://from-frames-vacations-output.trycloudflare.com
+  K8S_SPEC_ID: 442f33a7-3014-416a-8298-57f2abc6ace1
+  LAMBDA_SPEC_ID: 21d3fa37-35bc-469b-b7b5-e36012edba86
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create IDP build
+        id: idp-build
+        run: |
+          RESPONSE=$(curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds" \
+            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"metadata\":{\"ref\":\"$GITHUB_REF\",\"sha\":\"$GITHUB_SHA\",\"run_id\":\"$GITHUB_RUN_ID\"}}")
+          BUILD_ID=$(echo "$RESPONSE" | jq -r '.id')
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Build ID: $BUILD_ID"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}"
+          TAG="${{ steps.idp-build.outputs.build_id }}"
+          docker build -f k8s-deployment/app/Dockerfile -t "$IMAGE:$TAG" .
+          docker push "$IMAGE:$TAG"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Register docker-image artifact
+        run: |
+          curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}/artifacts" \
+            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"app\",\"type\":\"docker-image\",\"specId\":\"$K8S_SPEC_ID\",\"metadata\":{\"image\":\"$IMAGE\",\"tag\":\"$TAG\"}}"
+
+      - name: Build Lambda zip
+        run: bash aws-lambda/app/build.sh
+
+      - name: Compute Lambda zip SHA256
+        id: lambda-sha
+        run: echo "sha=$(sha256sum /tmp/lambda.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release for Lambda zip
+        id: gh-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ steps.idp-build.outputs.build_id }}
+          name: Build ${{ steps.idp-build.outputs.build_id }}
+          files: /tmp/lambda.zip
+
+      - name: Register lambda-zip artifact
+        run: |
+          BUILD_ID="${{ steps.idp-build.outputs.build_id }}"
+          ZIP_URL="https://github.com/${{ github.repository }}/releases/download/build-${BUILD_ID}/lambda.zip"
+          curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${BUILD_ID}/artifacts" \
+            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"app\",\"type\":\"lambda-zip\",\"specId\":\"$LAMBDA_SPEC_ID\",\"metadata\":{\"url\":\"$ZIP_URL\",\"sha256\":\"${{ steps.lambda-sha.outputs.sha }}\"}}"
+
+      - name: Finalize build — success
+        if: success()
+        run: |
+          curl -sf -X PATCH "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}" \
+            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"succeeded"}'
+
+      - name: Finalize build — failure
+        if: failure()
+        run: |
+          curl -sf -X PATCH "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}" \
+            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"status":"failed"}'
