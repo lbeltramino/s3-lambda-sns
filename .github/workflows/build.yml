@@ -26,7 +26,7 @@ jobs:
         id: idp-build
         run: |
           RESPONSE=$(curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds" \
-            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{\"metadata\":{\"ref\":\"$GITHUB_REF\",\"sha\":\"$GITHUB_SHA\",\"run_id\":\"$GITHUB_RUN_ID\"}}")
           BUILD_ID=$(echo "$RESPONSE" | jq -r '.id')
@@ -52,7 +52,7 @@ jobs:
       - name: Register docker-image artifact
         run: |
           curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}/artifacts" \
-            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{\"name\":\"app\",\"type\":\"docker-image\",\"specId\":\"$K8S_SPEC_ID\",\"metadata\":{\"image\":\"$IMAGE\",\"tag\":\"$TAG\"}}"
 
@@ -76,7 +76,7 @@ jobs:
           BUILD_ID="${{ steps.idp-build.outputs.build_id }}"
           ZIP_URL="https://github.com/${{ github.repository }}/releases/download/build-${BUILD_ID}/lambda.zip"
           curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${BUILD_ID}/artifacts" \
-            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{\"name\":\"app\",\"type\":\"lambda-zip\",\"specId\":\"$LAMBDA_SPEC_ID\",\"metadata\":{\"url\":\"$ZIP_URL\",\"sha256\":\"${{ steps.lambda-sha.outputs.sha }}\"}}"
 
@@ -84,7 +84,7 @@ jobs:
         if: success()
         run: |
           curl -sf -X PATCH "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}" \
-            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"status":"succeeded"}'
 
@@ -92,6 +92,6 @@ jobs:
         if: failure()
         run: |
           curl -sf -X PATCH "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}" \
-            -H "Authorization: Bearer ${{ secrets.IDP_API_KEY }}" \
+            -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{"status":"failed"}'
