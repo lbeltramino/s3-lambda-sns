@@ -54,7 +54,7 @@ jobs:
           curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${{ steps.idp-build.outputs.build_id }}/artifacts" \
             -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"app\",\"type\":\"docker-image\",\"specId\":\"$K8S_SPEC_ID\",\"metadata\":{\"image\":\"$IMAGE\",\"tag\":\"$TAG\"}}"
+            -d "{\"name\":\"app-k8s\",\"type\":\"docker-image\",\"specId\":\"$K8S_SPEC_ID\",\"metadata\":{\"image\":\"$IMAGE\",\"tag\":\"$TAG\"}}"
 
       - name: Build Lambda zip
         run: bash aws-lambda/app/build.sh
@@ -78,7 +78,7 @@ jobs:
           curl -sf -X POST "$IDP_HOST/api/v1/applications/${{ github.event.repository.name }}/builds/${BUILD_ID}/artifacts" \
             -H "Authorization: API-Key ${{ secrets.IDP_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"app\",\"type\":\"lambda-zip\",\"specId\":\"$LAMBDA_SPEC_ID\",\"metadata\":{\"url\":\"$ZIP_URL\",\"sha256\":\"${{ steps.lambda-sha.outputs.sha }}\"}}"
+            -d "{\"name\":\"app-lambda\",\"type\":\"lambda-zip\",\"specId\":\"$LAMBDA_SPEC_ID\",\"metadata\":{\"url\":\"$ZIP_URL\",\"sha256\":\"${{ steps.lambda-sha.outputs.sha }}\"}}"
 
       - name: Finalize build — success
         if: success()
