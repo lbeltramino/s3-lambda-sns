@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  IDP_HOST: https://from-frames-vacations-output.trycloudflare.com
+  IDP_HOST: https://substitute-provides-innovation-vacancies.trycloudflare.com
   K8S_SPEC_ID: 442f33a7-3014-416a-8298-57f2abc6ace1
   LAMBDA_SPEC_ID: 21d3fa37-35bc-469b-b7b5-e36012edba86
   REGISTRY: ghcr.io
